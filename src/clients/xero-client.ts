@@ -1,4 +1,5 @@
 import axios, { AxiosError } from "axios";
+import dotenv from "dotenv";
 import {
   IXeroClientConfig,
   Organisation,
@@ -8,7 +9,33 @@ import {
 
 import { ensureError } from "../helpers/ensure-error.js";
 
-// Abstract base class for all Xero clients
+dotenv.config();
+
+// CLI ARG PARSING
+const args = process.argv.slice(2);
+let runtimeBearerToken: string | undefined;
+let runtimeTenantId: string | undefined;
+
+args.forEach((val, index) => {
+  if (val === "--bearer-token") {
+    runtimeBearerToken = args[index + 1];
+  }
+  if (val === "--tenant-id") {
+    runtimeTenantId = args[index + 1];
+  }
+});
+
+// Use runtime values if present, fallback to env
+const client_id = process.env.XERO_CLIENT_ID;
+const client_secret = process.env.XERO_CLIENT_SECRET;
+const bearer_token = runtimeBearerToken || process.env.XERO_CLIENT_BEARER_TOKEN;
+const tenant_id = runtimeTenantId;
+const grant_type = "client_credentials";
+
+if (!bearer_token && (!client_id || !client_secret)) {
+  throw Error("Bearer token or Client ID/Secret must be provided");
+}
+
 abstract class MCPXeroClient extends XeroClient {
   public tenantId: string;
   private shortCode: string;
@@ -21,6 +48,7 @@ abstract class MCPXeroClient extends XeroClient {
 
   public abstract authenticate(): Promise<void>;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   override async updateTenants(fullOrgDetails?: boolean): Promise<any[]> {
     await super.updateTenants(fullOrgDetails);
     if (this.tenants && this.tenants.length > 0) {
@@ -52,6 +80,7 @@ abstract class MCPXeroClient extends XeroClient {
         this.shortCode = organisation.shortCode ?? "";
       } catch (error: unknown) {
         const err = ensureError(error);
+
         throw new Error(
           `Failed to get Organisation short code: ${err.message}`,
         );
@@ -61,28 +90,6 @@ abstract class MCPXeroClient extends XeroClient {
   }
 }
 
-// -----------------------------
-// 🟦 Bearer Token Client
-// -----------------------------
-class BearerTokenXeroClient extends MCPXeroClient {
-  private readonly bearerToken: string;
-
-  constructor(config: { bearerToken: string; tenantId: string }) {
-    super();
-    this.bearerToken = config.bearerToken;
-    this.tenantId = config.tenantId;
-  }
-
-  async authenticate(): Promise<void> {
-    this.setTokenSet({
-      access_token: this.bearerToken,
-    });
-  }
-}
-
-// -----------------------------
-// 🟨 Client Credentials Client (optional fallback)
-// -----------------------------
 class CustomConnectionsXeroClient extends MCPXeroClient {
   private readonly clientId: string;
   private readonly clientSecret: string;
@@ -117,20 +124,23 @@ class CustomConnectionsXeroClient extends MCPXeroClient {
         },
       );
 
-      // Get the tenant ID from the connections endpoint
       const token = response.data.access_token;
-      const connectionsResponse = await axios.get(
-        "https://api.xero.com/connections",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        },
-      );
 
-      if (connectionsResponse.data && connectionsResponse.data.length > 0) {
-        this.tenantId = connectionsResponse.data[0].tenantId;
+      // Get tenant ID from connections if not already supplied
+      if (!this.tenantId) {
+        const connectionsResponse = await axios.get(
+          "https://api.xero.com/connections",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          },
+        );
+
+        if (connectionsResponse.data && connectionsResponse.data.length > 0) {
+          this.tenantId = connectionsResponse.data[0].tenantId;
+        }
       }
 
       return response.data;
@@ -153,24 +163,30 @@ class CustomConnectionsXeroClient extends MCPXeroClient {
   }
 }
 
-// -----------------------------
-// 🏭 Factory Functions
-// -----------------------------
+class BearerTokenXeroClient extends MCPXeroClient {
+  private readonly bearerToken: string;
 
-export function createBearerTokenXeroClient(
-  bearerToken: string,
-  tenantId: string
-): BearerTokenXeroClient {
-  return new BearerTokenXeroClient({ bearerToken, tenantId });
+  constructor(config: { bearerToken: string; tenantId: string }) {
+    super();
+    this.bearerToken = config.bearerToken;
+    this.tenantId = config.tenantId;
+  }
+
+  async authenticate(): Promise<void> {
+    this.setTokenSet({
+      access_token: this.bearerToken,
+    });
+  }
 }
 
-export function createCustomConnectionsXeroClient(
-  clientId: string,
-  clientSecret: string
-): CustomConnectionsXeroClient {
-  return new CustomConnectionsXeroClient({
-    clientId,
-    clientSecret,
-    grantType: "client_credentials",
-  });
-}
+// Export the appropriate client depending on input
+export const xeroClient = bearer_token
+  ? new BearerTokenXeroClient({
+      bearerToken: bearer_token,
+      tenantId: tenant_id!,
+    })
+  : new CustomConnectionsXeroClient({
+      clientId: client_id!,
+      clientSecret: client_secret!,
+      grantType: grant_type,
+    });
