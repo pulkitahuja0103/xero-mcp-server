@@ -1,5 +1,4 @@
 import axios, { AxiosError } from "axios";
-import dotenv from "dotenv";
 import {
   IXeroClientConfig,
   Organisation,
@@ -9,17 +8,7 @@ import {
 
 import { ensureError } from "../helpers/ensure-error.js";
 
-dotenv.config();
-
-const client_id = process.env.XERO_CLIENT_ID;
-const client_secret = process.env.XERO_CLIENT_SECRET;
-const bearer_token = process.env.XERO_CLIENT_BEARER_TOKEN;
-const grant_type = "client_credentials";
-
-if (!bearer_token && (!client_id || !client_secret)) {
-  throw Error("Environment Variables not set - please check your .env file");
-}
-
+// Abstract base class for all Xero clients
 abstract class MCPXeroClient extends XeroClient {
   public tenantId: string;
   private shortCode: string;
@@ -32,7 +21,6 @@ abstract class MCPXeroClient extends XeroClient {
 
   public abstract authenticate(): Promise<void>;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   override async updateTenants(fullOrgDetails?: boolean): Promise<any[]> {
     await super.updateTenants(fullOrgDetails);
     if (this.tenants && this.tenants.length > 0) {
@@ -64,7 +52,6 @@ abstract class MCPXeroClient extends XeroClient {
         this.shortCode = organisation.shortCode ?? "";
       } catch (error: unknown) {
         const err = ensureError(error);
-
         throw new Error(
           `Failed to get Organisation short code: ${err.message}`,
         );
@@ -74,6 +61,28 @@ abstract class MCPXeroClient extends XeroClient {
   }
 }
 
+// -----------------------------
+// 🟦 Bearer Token Client
+// -----------------------------
+class BearerTokenXeroClient extends MCPXeroClient {
+  private readonly bearerToken: string;
+
+  constructor(config: { bearerToken: string; tenantId: string }) {
+    super();
+    this.bearerToken = config.bearerToken;
+    this.tenantId = config.tenantId;
+  }
+
+  async authenticate(): Promise<void> {
+    this.setTokenSet({
+      access_token: this.bearerToken,
+    });
+  }
+}
+
+// -----------------------------
+// 🟨 Client Credentials Client (optional fallback)
+// -----------------------------
 class CustomConnectionsXeroClient extends MCPXeroClient {
   private readonly clientId: string;
   private readonly clientSecret: string;
@@ -144,29 +153,24 @@ class CustomConnectionsXeroClient extends MCPXeroClient {
   }
 }
 
-class BearerTokenXeroClient extends MCPXeroClient {
-  private readonly bearerToken: string;
+// -----------------------------
+// 🏭 Factory Functions
+// -----------------------------
 
-  constructor(config: { bearerToken: string }) {
-    super();
-    this.bearerToken = config.bearerToken;
-  }
-
-  async authenticate(): Promise<void> {
-    this.setTokenSet({
-      access_token: this.bearerToken,
-    });
-
-    await this.updateTenants();
-  }
+export function createBearerTokenXeroClient(
+  bearerToken: string,
+  tenantId: string
+): BearerTokenXeroClient {
+  return new BearerTokenXeroClient({ bearerToken, tenantId });
 }
 
-export const xeroClient = bearer_token
-  ? new BearerTokenXeroClient({
-      bearerToken: bearer_token,
-    })
-  : new CustomConnectionsXeroClient({
-      clientId: client_id!,
-      clientSecret: client_secret!,
-      grantType: grant_type,
-    });
+export function createCustomConnectionsXeroClient(
+  clientId: string,
+  clientSecret: string
+): CustomConnectionsXeroClient {
+  return new CustomConnectionsXeroClient({
+    clientId,
+    clientSecret,
+    grantType: "client_credentials",
+  });
+}
