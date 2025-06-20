@@ -3,6 +3,7 @@ import { createXeroInvoice } from "../../handlers/create-xero-invoice.handler.js
 import { DeepLinkType, getDeepLink } from "../../helpers/get-deeplink.js";
 import { CreateXeroTool } from "../../helpers/create-xero-tool.js";
 import { Invoice } from "xero-node";
+import { getContactById, getContactByName } from "../../helpers/contact-helpers.js";
 
 const trackingSchema = z.object({
   name: z.string().describe("The name of the tracking category. Can be obtained from the list-tracking-categories tool"),
@@ -15,8 +16,8 @@ const lineItemSchema = z.object({
   description: z.string().describe("The description of the line item"),
   quantity: z.number().describe("The quantity of the line item"),
   unitAmount: z.number().describe("The price per unit of the line item"),
-  accountCode: z.string().describe("The account code of the line item - can be obtained from the list-accounts tool"),
-  taxType: z.string().describe("The tax type of the line item - can be obtained from the list-tax-rates tool"),
+  accountCode: z.string().describe("The account code of the line item - can be obtained from the list-accounts tool").optional(),
+  taxType: z.string().describe("The tax type of the line item - can be obtained from the list-tax-rates tool").optional(),
   itemCode: z.string().describe("The item code of the line item - can be obtained from the list-items tool \
     If the item is not listed, add without an item code and ask the user if they would like to add an item code.").optional(),
   tracking: z.array(trackingSchema).describe("Up to 2 tracking categories and options can be added to the line item. \
@@ -31,9 +32,9 @@ const CreateInvoiceTool = CreateXeroTool(
  This deep link can be used to view the invoice in Xero directly. \
  This link should be displayed to the user.",
   {
-    contactId: z.string().describe("The ID of the contact to create the invoice for. \
-      Can be obtained from the list-contacts tool."),
-      
+    email: z.string().email().describe("The email address of the contact. If provided, you must also provide either contactId or contactName.").optional(),
+    contactId: z.string().describe("The ID of the contact to create the invoice for. Can be obtained from the list-contacts tool.").optional(),
+    contactName: z.string().describe("The name of the contact to create the invoice for. Can be obtained from the list-contacts tool.").optional(),
     lineItems: z.array(lineItemSchema),
     type: z.enum(["ACCREC", "ACCPAY"]).describe("The type of invoice to create. \
       ACCREC is for sales invoices, Accounts Receivable, or customer invoices. \
@@ -42,9 +43,63 @@ const CreateInvoiceTool = CreateXeroTool(
     reference: z.string().describe("A reference number for the invoice.").optional(),
     date: z.string().describe("The date the invoice was created (YYYY-MM-DD format).").optional(),
   },
-  async ({ contactId, lineItems, type, reference, date }) => {
+  async ({ email, contactId, contactName, lineItems, type, reference, date }) => {
+    // If email is provided, require contactId or contactName
+    if (email && !contactId && !contactName) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: "Email provided. Please also provide either contactId or contactName.",
+          },
+        ],
+      };
+    }
+
+    let resolvedContactId = contactId;
+
+    // If contactId is not provided but contactName is, fetch contactId by name
+    if (!resolvedContactId && contactName) {
+      const contact = await getContactByName(contactName);
+      if (!contact) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Contact with name "${contactName}" not found.`,
+            },
+          ],
+        };
+      }
+      resolvedContactId = contact.contactID;
+    }
+
+    // If contactId is provided, validate it exists
+    if (resolvedContactId) {
+      const contact = await getContactById(resolvedContactId);
+      if (!contact) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Contact with ID "${resolvedContactId}" not found.`,
+            },
+          ],
+        };
+      }
+    } else {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: "No contactId or contactName provided. Cannot create invoice.",
+          },
+        ],
+      };
+    }
+
     const xeroInvoiceType = type === "ACCREC" ? Invoice.TypeEnum.ACCREC : Invoice.TypeEnum.ACCPAY;
-    const result = await createXeroInvoice(contactId, lineItems, xeroInvoiceType, reference, date);
+    const result = await createXeroInvoice(resolvedContactId, lineItems, xeroInvoiceType, reference, date);
     if (result.isError) {
       return {
         content: [
