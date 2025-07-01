@@ -14,6 +14,13 @@ interface InvoiceLineItem {
   tracking?: LineItemTracking[];
 }
 
+export type InvoiceStatus =
+  | 'DRAFT'
+  | 'SUBMITTED'
+  | 'AUTHORISED'
+  | 'DELETED'
+  | 'VOIDED';
+
 async function getInvoice(invoiceId: string): Promise<Invoice | undefined> {
   await xeroClient.authenticate();
 
@@ -35,6 +42,7 @@ async function updateInvoice(
   dueDate?: string,
   date?: string,
   contactId?: string,
+  status?: InvoiceStatus,
 ): Promise<Invoice | undefined> {
   const invoice: Invoice = {
     lineItems: lineItems,
@@ -42,6 +50,7 @@ async function updateInvoice(
     dueDate: dueDate,
     date: date,
     contact: contactId ? { contactID: contactId } : undefined,
+    ...(status ? { status: Invoice.StatusEnum[status as keyof typeof Invoice.StatusEnum] } : {}),
   };
 
   const response = await xeroClient.accountingApi.updateInvoice(
@@ -60,6 +69,14 @@ async function updateInvoice(
 
 /**
  * Update an existing invoice in Xero
+ * @param invoiceId
+ * @param lineItems
+ * @param reference
+ * @param dueDate
+ * @param date
+ * @param contactId
+ * @param status - Optional. Used for delete/void/authorize actions.
+ * @param action - Optional. 'delete' | 'void' | 'authorize' | undefined
  */
 export async function updateXeroInvoice(
   invoiceId: string,
@@ -68,21 +85,72 @@ export async function updateXeroInvoice(
   dueDate?: string,
   date?: string,
   contactId?: string,
+  status?: InvoiceStatus,
+  action?: 'delete' | 'void' | 'authorize',
 ): Promise<XeroClientResponse<Invoice>> {
   try {
     const existingInvoice = await getInvoice(invoiceId);
-
     const invoiceStatus = existingInvoice?.status;
 
-    // Only allow updates to DRAFT invoices
-    if (invoiceStatus !== Invoice.StatusEnum.DRAFT) {
-      return {
-        result: null,
-        isError: true,
-        error: `Cannot update invoice because it is not a draft. Current status: ${invoiceStatus}`,
-      };
+    // Handle delete/void/authorize actions
+    if (action === 'delete') {
+      if (
+        invoiceStatus === Invoice.StatusEnum.DRAFT ||
+        invoiceStatus === Invoice.StatusEnum.SUBMITTED
+      ) {
+        // Set status to DELETED
+        const updatedInvoice = await updateInvoice(
+          invoiceId,
+          lineItems,
+          reference,
+          dueDate,
+          date,
+          contactId,
+          'DELETED',
+        );
+        if (!updatedInvoice) throw new Error('Invoice delete failed.');
+        return { result: updatedInvoice, isError: false, error: null };
+      } else if (invoiceStatus === Invoice.StatusEnum.AUTHORISED) {
+        // Set status to VOIDED
+        const updatedInvoice = await updateInvoice(
+          invoiceId,
+          lineItems,
+          reference,
+          dueDate,
+          date,
+          contactId,
+          'VOIDED',
+        );
+        if (!updatedInvoice) throw new Error('Invoice void failed.');
+        return { result: updatedInvoice, isError: false, error: null };
+      } else {
+        return {
+          result: null,
+          isError: true,
+          error: `Invoice cannot be deleted. Current status: ${invoiceStatus}`,
+        };
+      }
     }
 
+    if (action === 'authorize') {
+      if (invoiceStatus !== Invoice.StatusEnum.AUTHORISED) {
+        // Set status to AUTHORISED
+        const updatedInvoice = await updateInvoice(
+          invoiceId,
+          lineItems,
+          reference,
+          dueDate,
+          date,
+          contactId,
+          'AUTHORISED',
+        );
+        if (!updatedInvoice) throw new Error('Invoice authorize failed.');
+        return { result: updatedInvoice, isError: false, error: null };
+      }
+      // Already authorized, just update other fields
+    }
+
+    // Default: update invoice as before (no status change)
     const updatedInvoice = await updateInvoice(
       invoiceId,
       lineItems,
@@ -90,12 +158,11 @@ export async function updateXeroInvoice(
       dueDate,
       date,
       contactId,
+      status,
     );
-
     if (!updatedInvoice) {
-      throw new Error("Invoice update failed.");
+      throw new Error('Invoice update failed.');
     }
-
     return {
       result: updatedInvoice,
       isError: false,
