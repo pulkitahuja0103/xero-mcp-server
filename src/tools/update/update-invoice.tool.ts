@@ -26,23 +26,26 @@ const lineItemSchema = z.object({
 
 const UpdateInvoiceTool = CreateXeroTool(
   "update-invoice",
-  "Update an invoice in Xero. Only works on draft invoices.\
-  All line items must be provided. Any line items not provided will be removed. Including existing line items.\
+  `Update, delete, void, or authorize an invoice in Xero.\
+  - To delete: If the invoice is DRAFT or SUBMITTED, it will be deleted (status set to DELETED).\
+    If AUTHORISED, it will be voided (status set to VOIDED).\
+  - To authorize: If the invoice is not AUTHORISED, it can be authorized (status set to AUTHORISED).\
+  All line items must be provided for updates. Any line items not provided will be removed, including existing line items.\
   Do not modify line items that have not been specified by the user.\
- When an invoice is updated, a deep link to the invoice in Xero is returned. \
- This deep link can be used to view the contact in Xero directly. \
- This link should be displayed to the user.",
+  When an invoice is updated, a deep link to the invoice in Xero is returned.\
+  This deep link can be used to view the invoice in Xero directly.\
+  This link should be displayed to the user.`,
   {
     invoiceId: z.string().describe("The ID of the invoice to update."),
     lineItems: z.array(lineItemSchema).optional().describe(
-      "All line items must be provided. Any line items not provided will be removed. Including existing line items. \
-      Do not modify line items that have not been specified by the user",
+      "All line items must be provided. Any line items not provided will be removed. Including existing line items. \\n      Do not modify line items that have not been specified by the user",
     ),
     reference: z.string().optional().describe("A reference number for the invoice."),
     dueDate: z.string().optional().describe("The due date of the invoice."),
     date: z.string().optional().describe("The date of the invoice."),
-    contactId: z.string().optional().describe("The ID of the contact to update the invoice for. \
-      Can be obtained from the list-contacts tool."),
+    contactId: z.string().optional().describe("The ID of the contact to update the invoice for. \\n      Can be obtained from the list-contacts tool."),
+    status: z.enum(["DRAFT", "SUBMITTED", "AUTHORISED", "DELETED", "VOIDED"]).optional().describe("The status to set for the invoice. Use for advanced updates or to force a status change."),
+    action: z.enum(["delete", "void", "authorize"]).optional().describe("Special action to perform: delete, void, or authorize. Use this to trigger business logic for deletion, voiding, or authorizing invoices."),
   },
   async (
     {
@@ -52,6 +55,8 @@ const UpdateInvoiceTool = CreateXeroTool(
       dueDate,
       date,
       contactId,
+      status,
+      action,
     }: {
       invoiceId: string;
       lineItems?: Array<{
@@ -60,11 +65,15 @@ const UpdateInvoiceTool = CreateXeroTool(
         unitAmount: number;
         accountCode: string;
         taxType: string;
+        itemCode?: string;
+        tracking?: Array<{ name: string; option: string; trackingCategoryID: string }>;
       }>;
       reference?: string;
       dueDate?: string;
       date?: string;
       contactId?: string;
+      status?: "DRAFT" | "SUBMITTED" | "AUTHORISED" | "DELETED" | "VOIDED";
+      action?: "delete" | "void" | "authorize";
     },
     //_extra: { signal: AbortSignal },
   ) => {
@@ -75,6 +84,8 @@ const UpdateInvoiceTool = CreateXeroTool(
       dueDate,
       date,
       contactId,
+      status,
+      action,
     );
     if (result.isError) {
       return {
