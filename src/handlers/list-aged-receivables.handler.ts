@@ -11,21 +11,29 @@ async function listAgedReceivables(
 ): Promise<ReportWithRow | undefined> {
   await xeroClient.authenticate();
 
-  const response = await xeroClient.accountingApi.getReportAgedReceivables(
-    xeroClient.tenantId,
-    reportDate,
-    invoicesFromDate,
-    invoicesToDate,
-    getClientHeaders()
-  );
+  try {
+    const response = await xeroClient.accountingApi.getReportAgedReceivables(
+      xeroClient.tenantId,
+      reportDate,
+      invoicesFromDate,
+      invoicesToDate,
+      getClientHeaders()
+    );
 
-  // Limit the number of rows to avoid large payloads
-  const report = response.body.reports?.[0];
-  if (report && Array.isArray(report.rows)) {
-    report.rows = report.rows.slice(0, 10); // Only keep first 10 rows
+    const report = response.body.reports?.[0];
+    if (report && Array.isArray(report.rows)) {
+      // Optionally, only return summary fields for each row
+      report.rows = report.rows.slice(0, 10).map((row) => ({
+        title: row.title,
+        cells: row.cells?.slice(0, 5), // Only first 5 cells for brevity
+      }));
+    }
+
+    return report;
+  } catch (err) {
+    console.error("Error fetching aged receivables:", err);
+    throw err;
   }
-
-  return report;
 }
 
 export async function listXeroAgedReceivables(
@@ -40,14 +48,14 @@ export async function listXeroAgedReceivables(
       return {
         result: null,
         isError: true,
-        error: "Failed to get aged receivables report from Xero."
+        error: "Failed to get aged receivables report from Xero.",
       };
     }
 
     return {
       result: report,
       isError: false,
-      error: null
+      error: null,
     };
   } catch (error) {
     return {
