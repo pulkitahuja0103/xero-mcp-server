@@ -111,10 +111,11 @@ const ActualVsBudgetTool = CreateXeroTool(
       ...Object.keys(actualSections),
       ...Object.keys(budgetSections),
     ]));
-    const resultObj: Record<string, { actual: number; budget: number }> = {};
+    const resultObj: Record<string, { actual: number | null; budget: number | null }> = {};
     allKeys.forEach((key) => {
-      const actualVal = actualSections[key] ?? 0;
-      const budgetVal = budgetSections[key] ?? 0;
+      // Use null if the value is undefined, to make missing data explicit
+      const actualVal = key in actualSections ? actualSections[key] : null;
+      const budgetVal = key in budgetSections ? budgetSections[key] : null;
       resultObj[key] = {
         actual: actualVal,
         budget: budgetVal,
