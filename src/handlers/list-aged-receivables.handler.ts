@@ -19,7 +19,13 @@ async function listAgedReceivables(
     getClientHeaders()
   );
 
-  return response.body.reports?.[0];
+  // Limit the number of rows to avoid large payloads
+  const report = response.body.reports?.[0];
+  if (report && Array.isArray(report.rows)) {
+    report.rows = report.rows.slice(0, 10); // Only keep first 10 rows
+  }
+
+  return report;
 }
 
 export async function listXeroAgedReceivables(
