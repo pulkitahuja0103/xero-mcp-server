@@ -5,7 +5,6 @@ import { DeleteTools } from "./delete/index.js";
 import { GetTools } from "./get/index.js";
 import { ListTools } from "./list/index.js";
 import { UpdateTools } from "./update/index.js";
-import { BusinessInsightTools } from "./business-insight/index.js";
 
 export function ToolFactory(server: McpServer) {
   DeleteTools.map((tool) => tool()).forEach((tool) =>

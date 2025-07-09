@@ -17,9 +17,9 @@ function calculatePeriods(start: string, end: string): number {
 
 const ListBudgetSummaryTool = CreateXeroTool(
   "list-budget-summary",
-  "List the Budget Summary report from Xero for a given start date, end date (optional), period (optional), and timeframe (optional, default MONTH).",
+  "Lists the Budget Summary report in Xero. This provides a summary of budgeted revenue, expenses, and profit or loss over a specified period of time. Use this to retrieve budgeted values for financial analysis, forecasting, or comparison with actuals.",
   {
-    date: z.string().describe("Start date in YYYY-MM-DD format"),
+    date: z.string().describe("Optional start date in YYYY-MM-DD format"),
     endDate: z
       .string()
       .optional()
@@ -29,11 +29,13 @@ const ListBudgetSummaryTool = CreateXeroTool(
     periods: z
       .number()
       .optional()
-      .describe("Number of periods (optional, overrides endDate if provided)"),
+      .describe(
+        "Optional number of periods to report on (e.g., 1 for a month, 12 for a year)",
+      ),
     timeframe: z
       .enum(["MONTH", "YEAR"])
       .optional()
-      .describe("Period type (MONTH or YEAR, default MONTH)"),
+      .describe("Optional timeframe for the report (MONTH or YEAR)"),
   },
   async ({ date, endDate, periods, timeframe }) => {
     let calculatedPeriods = periods;
@@ -51,7 +53,7 @@ const ListBudgetSummaryTool = CreateXeroTool(
         content: [
           {
             type: "text" as const,
-            text: `Error listing budget summary: ${response.error}`,
+            text: `Error listing budget summary report: ${response.error}`,
           },
         ],
       };
