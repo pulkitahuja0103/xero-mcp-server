@@ -32,12 +32,14 @@ async function listAgedReceivables(
     });
 
     // Prepare rows: one row per overdue invoice, flat object
-    const rows = overdueInvoices.map((inv) => ({
-      "Contact Name": inv.contact?.name || "Unknown",
-      "Invoice ID": inv.invoiceID || "Unknown",
-      "Overdue Amount": Number(inv.amountDue ?? 0),
-      "Due Date": inv.dueDate || "",
-    }));
+    const rows = overdueInvoices
+      .map((inv) => ({
+        "Contact Name": inv.contact?.name || "Unknown",
+        "Invoice ID": inv.invoiceID || "Unknown",
+        "Overdue Amount": Number(inv.amountDue ?? 0),
+        "Due Date": inv.dueDate || "",
+      }))
+      .slice(0, 50); // Limit to 50 rows for payload safety
 
     return {
       reportName: "Aged Debtors - Overdue Invoices",
