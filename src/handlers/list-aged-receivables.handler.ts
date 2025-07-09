@@ -7,6 +7,7 @@ import { getClientHeaders } from "../helpers/get-client-headers.js";
 import { ReportWithRow } from "xero-node";
 
 async function listAgedReceivables(
+  contactId?: string,
   reportDate?: string,
   invoicesFromDate?: string,
   invoicesToDate?: string
@@ -26,7 +27,7 @@ async function listAgedReceivables(
         "Contact.Name", // Order by contact name
         undefined, // iDs
         undefined, // invoiceNumbers
-        undefined, // contactIDs
+        contactId ? [contactId] : undefined, // contactIDs
         undefined, // statuses
         page
       );
@@ -74,12 +75,14 @@ async function listAgedReceivables(
 }
 
 export async function listXeroAgedReceivables(
+  contactId?: string,
   reportDate?: string,
   invoicesFromDate?: string,
   invoicesToDate?: string
 ): Promise<XeroClientResponse<ReportWithRow>> {
   try {
     const report = await listAgedReceivables(
+      contactId,
       reportDate,
       invoicesFromDate,
       invoicesToDate

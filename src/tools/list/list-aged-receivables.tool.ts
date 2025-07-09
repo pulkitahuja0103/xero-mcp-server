@@ -6,8 +6,9 @@ import { formatAgedReportFilter } from "../../helpers/format-aged-report-filter.
 const ListAgedReceivables = CreateXeroTool(
   "list-aged-receivables",
   `Lists all aged receivables in Xero.
-  This shows overdue invoices across all contacts up to a report date.`,
+  This shows overdue invoices across all contacts up to a report date. OR for a certain contact up to a report date.`,
   {
+    contactId: z.string().optional().describe("Optional contact ID to filter the aged receivables report. If not provided, it will show all contacts and contact ID will be undefined."),
     reportDate: z.string().optional()
       .describe("Optional date to retrieve aged receivables in YYYY-MM-DD format. If none is provided, defaults to end of the current month."),
     invoicesFromDate: z.string().optional()
@@ -15,8 +16,8 @@ const ListAgedReceivables = CreateXeroTool(
     invoicesToDate: z.string().optional()
       .describe("Optional to date in YYYY-MM-DD format. If provided, will only show payable invoices before this date."),
   },
-  async ({ reportDate, invoicesFromDate, invoicesToDate }) => {
-    const response = await listXeroAgedReceivables(reportDate, invoicesFromDate, invoicesToDate);
+  async ({ contactId, reportDate, invoicesFromDate, invoicesToDate }) => {
+    const response = await listXeroAgedReceivables(contactId, reportDate, invoicesFromDate, invoicesToDate);
 
     if (response.isError) {
       return {
