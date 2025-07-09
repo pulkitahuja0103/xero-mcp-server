@@ -34,26 +34,40 @@ async function listAgedReceivables(
     // Group by contact, then list each overdue invoice with id and due amount
     const contactMap: Record<
       string,
-      { contactName: string; invoices: { invoiceId: string; amountDue: number }[] }
+      { contactName: string; invoices: { invoiceId: string; amountDue: number; dueDate: string }[] }
     > = {};
 
     for (const invoice of overdueInvoices) {
       const contactName = invoice.contact?.name || "Unknown";
       const invoiceId = invoice.invoiceID || "Unknown";
       const amountDue = invoice.amountDue ?? 0;
+      const dueDate = invoice.dueDate || "";
 
       if (!contactMap[contactName]) {
         contactMap[contactName] = { contactName, invoices: [] };
       }
-      contactMap[contactName].invoices.push({ invoiceId, amountDue });
+      contactMap[contactName].invoices.push({ invoiceId, amountDue, dueDate });
     }
+
+    // Optionally, add column headers if your consumer expects them
+    const columns = [
+      { name: "Contact Name" },
+      { name: "Invoice ID" },
+      { name: "Due Amount" },
+      { name: "Due Date" }
+    ];
 
     // Prepare rows: each contact, then each invoice under that contact
     const rows = Object.values(contactMap)
       .flatMap((contact) =>
         contact.invoices.map((inv) => ({
           title: contact.contactName,
-          cells: [{ value: inv.invoiceId }, { value: inv.amountDue.toFixed(2) }],
+          cells: [
+            { value: contact.contactName }, // Contact Name
+            { value: inv.invoiceId },       // Invoice ID
+            { value: inv.amountDue.toFixed(2) }, // Due Amount as string
+            { value: inv.dueDate }          // Due Date
+          ],
         }))
       )
       .slice(0, 50); // Limit to 50 rows for payload safety
@@ -61,7 +75,8 @@ async function listAgedReceivables(
     return {
       reportName: "Overdue Invoices by Contact",
       reportDate: now.toISOString().split("T")[0],
-      rows: rows,
+      columns, // include columns if your consumer expects them
+      rows,
     } as ReportWithRow;
   } catch (err) {
     console.error("Error fetching overdue receivables by contact:", err);
