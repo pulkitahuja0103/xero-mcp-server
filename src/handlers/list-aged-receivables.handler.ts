@@ -34,7 +34,7 @@ async function listAgedReceivables(
       fetched = invoices.length;
       allInvoices.push(...invoices);
       page++;
-    } while (fetched === 100); // Xero returns max 100 per page
+    } while (fetched === 50); // Xero returns max 50 per page
 
     const now = reportDate ? new Date(reportDate) : new Date();
 
