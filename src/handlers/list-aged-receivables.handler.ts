@@ -1,9 +1,6 @@
-// Updated list-aged-receivables.handler.ts to use Invoices instead of broken AgedReceivables endpoint
-
 import { xeroClient } from "../clients/xero-client.js";
 import { XeroClientResponse } from "../types/tool-response.js";
 import { formatError } from "../helpers/format-error.js";
-import { getClientHeaders } from "../helpers/get-client-headers.js";
 import { ReportWithRow } from "xero-node";
 
 async function listAgedReceivables(

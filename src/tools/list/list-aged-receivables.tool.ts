@@ -10,7 +10,7 @@ const ListAgedReceivables = CreateXeroTool(
   {
     contactId: z.string().optional().describe("Optional contact ID to filter the aged receivables report. If not provided, it will show all contacts and contact ID will be undefined."),
     reportDate: z.string().optional()
-      .describe("Optional date to retrieve aged receivables in YYYY-MM-DD format. If none is provided, defaults to end of the current month."),
+      .describe("Optional date to retrieve aged receivables in YYYY-MM-DD format. If none is provided, defaults to end of the current month. and also show choosen date in the report."),
     invoicesFromDate: z.string().optional()
       .describe("Optional from date in YYYY-MM-DD format. If provided, will only show payable invoices after this date."),
     invoicesToDate: z.string().optional()
