@@ -94,7 +94,7 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const budgetReport = budgetResp.result?.[0];
 
-    // Helper: extract period values for a section title
+    // Helper: extract period values for a section title (handles summary/total rows)
     function extractPeriodValues(
       report: any,
       sectionTitle: string,
@@ -108,18 +108,28 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
           row.title.toLowerCase().includes(sectionTitle.toLowerCase()),
       );
       if (!section || !Array.isArray(section.rows)) return result;
-      for (const row of section.rows) {
-        if (
-          row.rowType === "Row" &&
-          Array.isArray(row.cells) &&
-          row.cells.length > 1
-        ) {
-          // Assume first cell is label (period), second is value
-          const period = row.cells[0]?.value;
-          const value = row.cells[1]?.value
-            ? parseFloat(String(row.cells[1].value).replace(/[^0-9.-]+/g, ""))
+      // Look for summary/total row (rowType === 'Summary' or label includes 'Total')
+      const summaryRow = section.rows.find(
+        (row: any) =>
+          (row.rowType === "Summary" ||
+            (Array.isArray(row.cells) &&
+              row.cells[0]?.value &&
+              typeof row.cells[0].value === "string" &&
+              row.cells[0].value.toLowerCase().includes("total"))) &&
+          Array.isArray(row.cells)
+      );
+      if (summaryRow && Array.isArray(summaryRow.cells)) {
+        // Use report.columns for period labels if available, else fallback to Period 1, 2, ...
+        for (let i = 1; i < summaryRow.cells.length; i++) {
+          let periodLabel = `Period ${i}`;
+          if (Array.isArray(report.columns) && report.columns[i]) {
+            // Prefer date if available, else fallback to title
+            periodLabel = report.columns[i].date || report.columns[i].title || periodLabel;
+          }
+          const value = summaryRow.cells[i]?.value
+            ? parseFloat(String(summaryRow.cells[i].value).replace(/[^0-9.-]+/g, ""))
             : null;
-          if (period) result[period] = value;
+          result[periodLabel] = value;
         }
       }
       return result;
