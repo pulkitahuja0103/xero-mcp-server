@@ -31,26 +31,35 @@ async function listAgedReceivables(
       return dueDate < now;
     });
 
-    // Aggregate total due per contact for overdue invoices
-    const summaryMap: Record<string, number> = {};
+    // Group by contact, then list each overdue invoice with id and due amount
+    const contactMap: Record<
+      string,
+      { contactName: string; invoices: { invoiceId: string; amountDue: number }[] }
+    > = {};
 
     for (const invoice of overdueInvoices) {
       const contactName = invoice.contact?.name || "Unknown";
+      const invoiceId = invoice.invoiceID || "Unknown";
       const amountDue = invoice.amountDue ?? 0;
-      if (!summaryMap[contactName]) summaryMap[contactName] = 0;
-      summaryMap[contactName] += amountDue;
+
+      if (!contactMap[contactName]) {
+        contactMap[contactName] = { contactName, invoices: [] };
+      }
+      contactMap[contactName].invoices.push({ invoiceId, amountDue });
     }
 
-    // Limit to first 10 rows to avoid large payloads
-    const rows = Object.entries(summaryMap)
-      .slice(0, 10)
-      .map(([contact, totalDue]) => ({
-        title: contact,
-        cells: [{ value: totalDue.toFixed(2) }],
-      }));
+    // Prepare rows: each contact, then each invoice under that contact
+    const rows = Object.values(contactMap)
+      .flatMap((contact) =>
+        contact.invoices.map((inv) => ({
+          title: contact.contactName,
+          cells: [{ value: inv.invoiceId }, { value: inv.amountDue.toFixed(2) }],
+        }))
+      )
+      .slice(0, 50); // Limit to 50 rows for payload safety
 
     return {
-      reportName: "Overdue Receivables by Contact",
+      reportName: "Overdue Invoices by Contact",
       reportDate: now.toISOString().split("T")[0],
       rows: rows,
     } as ReportWithRow;
