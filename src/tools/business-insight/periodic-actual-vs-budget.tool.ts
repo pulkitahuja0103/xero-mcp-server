@@ -53,13 +53,33 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     const defaultToStr = defaultTo.toISOString().slice(0, 10);
     const fromDate = args.fromDate || defaultFrom;
     const toDate = args.toDate || defaultToStr;
+    let periods = args.periods;
     const timeframe = args.timeframe || "MONTH";
+
+    // If user requests a range over multiple months/quarters/years and periods is not set, calculate periods
+    if (!periods && fromDate && toDate) {
+      const start = new Date(fromDate);
+      const end = new Date(toDate);
+      if (timeframe === "MONTH") {
+        periods =
+          (end.getFullYear() - start.getFullYear()) * 12 +
+          (end.getMonth() - start.getMonth()) +
+          1;
+      } else if (timeframe === "QUARTER") {
+        periods =
+          (end.getFullYear() - start.getFullYear()) * 4 +
+          (Math.floor(end.getMonth() / 3) - Math.floor(start.getMonth() / 3)) +
+          1;
+      } else if (timeframe === "YEAR") {
+        periods = end.getFullYear() - start.getFullYear() + 1;
+      }
+    }
 
     // Fetch actuals (P&L)
     const actualResp = await listXeroProfitAndLoss(
       fromDate,
       toDate,
-      args.periods,
+      periods,
       timeframe,
       args.standardLayout,
       args.paymentsOnly,
@@ -79,7 +99,7 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     // Fetch budget
     const budgetResp = await listXeroBudgetSummary(
       fromDate,
-      args.periods,
+      periods,
       timeframe === "YEAR" ? "YEAR" : "MONTH", // Budget summary only supports MONTH or YEAR
     );
     if (budgetResp.isError) {
@@ -116,7 +136,7 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
               row.cells[0]?.value &&
               typeof row.cells[0].value === "string" &&
               row.cells[0].value.toLowerCase().includes("total"))) &&
-          Array.isArray(row.cells)
+          Array.isArray(row.cells),
       );
       if (summaryRow && Array.isArray(summaryRow.cells)) {
         // Use report.columns for period labels if available, else fallback to Period 1, 2, ...
@@ -124,10 +144,13 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
           let periodLabel = `Period ${i}`;
           if (Array.isArray(report.columns) && report.columns[i]) {
             // Prefer date if available, else fallback to title
-            periodLabel = report.columns[i].date || report.columns[i].title || periodLabel;
+            periodLabel =
+              report.columns[i].date || report.columns[i].title || periodLabel;
           }
           const value = summaryRow.cells[i]?.value
-            ? parseFloat(String(summaryRow.cells[i].value).replace(/[^0-9.-]+/g, ""))
+            ? parseFloat(
+                String(summaryRow.cells[i].value).replace(/[^0-9.-]+/g, ""),
+              )
             : null;
           result[periodLabel] = value;
         }
