@@ -14,18 +14,34 @@ async function listAgedReceivables(
   await xeroClient.authenticate();
 
   try {
-    const headers = await getClientHeaders();
-    const result = await xeroClient.accountingApi.getInvoices(
-      xeroClient.tenantId,
-      undefined,
-      `Status=="AUTHORISED" AND AmountDue>0`
-    );
+    const allInvoices: any[] = [];
+    let page = 1;
+    let fetched = 0;
+    let total = 0;
+
+    do {
+      const result = await xeroClient.accountingApi.getInvoices(
+        xeroClient.tenantId,
+        undefined,
+        `Status=="AUTHORISED" AND AmountDue>0`,
+        undefined, // order
+        undefined, // iDs
+        undefined, // invoiceNumbers
+        undefined, // contactIDs
+        undefined, // statuses
+        page
+      );
+      const invoices = result.body.invoices ?? [];
+      fetched = invoices.length;
+      total += fetched;
+      allInvoices.push(...invoices);
+      page++;
+    } while (fetched === 100); // Xero returns max 100 per page
 
     const now = reportDate ? new Date(reportDate) : new Date();
-    const invoices = result.body.invoices ?? [];
 
     // Only include invoices that are overdue (due date before today)
-    const overdueInvoices = invoices.filter((inv) => {
+    const overdueInvoices = allInvoices.filter((inv) => {
       if (!inv.dueDate) return false;
       const dueDate = new Date(inv.dueDate);
       return dueDate < now;
