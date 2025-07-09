@@ -17,14 +17,13 @@ async function listAgedReceivables(
     const allInvoices: any[] = [];
     let page = 1;
     let fetched = 0;
-    let total = 0;
 
     do {
       const result = await xeroClient.accountingApi.getInvoices(
         xeroClient.tenantId,
         undefined,
-        `Status=="AUTHORISED" AND AmountDue>0`,
-        undefined, // order
+        `Status=="AUTHORISED" AND AmountDue>0 AND Type=="ACCREC"`, // Only sales invoices
+        "Contact.Name", // Order by contact name
         undefined, // iDs
         undefined, // invoiceNumbers
         undefined, // contactIDs
@@ -33,7 +32,6 @@ async function listAgedReceivables(
       );
       const invoices = result.body.invoices ?? [];
       fetched = invoices.length;
-      total += fetched;
       allInvoices.push(...invoices);
       page++;
     } while (fetched === 100); // Xero returns max 100 per page
@@ -45,6 +43,15 @@ async function listAgedReceivables(
       if (!inv.dueDate) return false;
       const dueDate = new Date(inv.dueDate);
       return dueDate < now;
+    });
+
+    // Sort by contact name to group all invoices of a contact together
+    overdueInvoices.sort((a, b) => {
+      const nameA = (a.contact?.name || "").toLowerCase();
+      const nameB = (b.contact?.name || "").toLowerCase();
+      if (nameA < nameB) return -1;
+      if (nameA > nameB) return 1;
+      return 0;
     });
 
     // Prepare rows: one row per overdue invoice, flat object
