@@ -114,19 +114,62 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const budgetReport = budgetResp.result?.[0];
 
-    // Instead of extracting and matching by metric, just return the full report JSONs for actual and budgeted
+    // Helper to extract metric row from Xero report
+    function findMetricRow(report: { rows?: Array<{ rowType?: string; title?: string; rows?: any[] }> } | undefined, metric: string) {
+      if (!report || !report.rows) return null;
+      const lowerMetric = metric.toLowerCase();
+      for (const row of report.rows) {
+        if (
+          row.rowType === "Section" &&
+          row.title &&
+          row.title.toLowerCase() === lowerMetric
+        ) {
+          return row;
+        }
+      }
+      return null;
+    }
+
+    // Helper to extract period values from a metric row
+    function extractPeriodValues(row: { rows?: Array<{ rowType?: string; cells?: Array<{ value?: string }> }> } | null): (number | null)[] {
+      if (!row || !row.rows) return [];
+      // Find the row with rowType === 'Summary'
+      const summaryRow = row.rows.find((r) => r.rowType === "Summary");
+      if (!summaryRow || !summaryRow.cells) return [];
+      // The first cell is usually the label, the rest are period values
+      return summaryRow.cells.slice(1).map((cell): number | null => {
+        // Remove commas, parse as float
+        const value = cell.value ? parseFloat(cell.value.replace(/,/g, "")) : null;
+        return value !== null && !isNaN(value) ? value : null;
+      });
+    }
+
+    // Helper to extract period labels from report
+    function extractPeriodLabels(report: { columns?: Array<{ title?: string }> } | undefined): string[] {
+      if (!report || !report.columns) return [];
+      // The first column is usually the label, the rest are period labels
+      return report.columns.slice(1).map((col) => col.title ?? "");
+    }
+
+    // Extract actuals and budgeted values for the metric
+    const actualMetricRow = findMetricRow(actualReport, args.metric);
+    const budgetMetricRow = findMetricRow(budgetReport, args.metric);
+    const actualValues = extractPeriodValues(actualMetricRow);
+    const budgetValues = extractPeriodValues(budgetMetricRow);
+    const periodLabels = extractPeriodLabels(actualReport);
+
+    // Align periods and build result
+    const result = periodLabels.map((period: string, idx: number) => ({
+      period,
+      actual: actualValues[idx] ?? null,
+      budgeted: budgetValues[idx] ?? null,
+    }));
+
     return {
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify(
-            {
-              actual: actualReport,
-              budgeted: budgetReport,
-            },
-            null,
-            2,
-          ),
+          text: JSON.stringify(result, null, 2),
         },
       ],
     };
