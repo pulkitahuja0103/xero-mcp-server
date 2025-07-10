@@ -114,7 +114,7 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const budgetReport = budgetResp.result?.[0];
 
-    // Helper: extract period values for a section title (handles summary/total rows)
+    // Helper: extract period values for a section title (sums all account/category rows per period)
     function extractPeriodValues(
       report: any,
       sectionTitle: string,
@@ -128,32 +128,25 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
           row.title.toLowerCase().includes(sectionTitle.toLowerCase()),
       );
       if (!section || !Array.isArray(section.rows)) return result;
-      // Look for summary/total row (rowType === 'Summary' or label includes 'Total')
-      const summaryRow = section.rows.find(
-        (row: any) =>
-          (row.rowType === "Summary" ||
-            (Array.isArray(row.cells) &&
-              row.cells[0]?.value &&
-              typeof row.cells[0].value === "string" &&
-              row.cells[0].value.toLowerCase().includes("total"))) &&
-          Array.isArray(row.cells),
-      );
-      if (summaryRow && Array.isArray(summaryRow.cells)) {
-        // Use report.columns for period labels if available, else fallback to Period 1, 2, ...
-        for (let i = 1; i < summaryRow.cells.length; i++) {
-          let periodLabel = `Period ${i}`;
-          if (Array.isArray(report.columns) && report.columns[i]) {
-            // Prefer date if available, else fallback to title
-            periodLabel =
-              report.columns[i].date || report.columns[i].title || periodLabel;
-          }
-          const value = summaryRow.cells[i]?.value
-            ? parseFloat(
-                String(summaryRow.cells[i].value).replace(/[^0-9.-]+/g, ""),
-              )
-            : null;
-          result[periodLabel] = value;
+      // For each period column, sum all 'Row' rows (accounts/categories)
+      const numPeriods = Array.isArray(report.columns) ? report.columns.length - 1 : 0;
+      for (let i = 1; i <= numPeriods; i++) {
+        let periodLabel = `Period ${i}`;
+        if (Array.isArray(report.columns) && report.columns[i]) {
+          periodLabel = report.columns[i].date || report.columns[i].title || periodLabel;
         }
+        let sum = 0;
+        let hasValue = false;
+        for (const row of section.rows) {
+          if (row.rowType === "Row" && Array.isArray(row.cells) && row.cells[i]) {
+            const val = row.cells[i].value ? parseFloat(String(row.cells[i].value).replace(/[^0-9.-]+/g, "")) : null;
+            if (val !== null && !isNaN(val)) {
+              sum += val;
+              hasValue = true;
+            }
+          }
+        }
+        result[periodLabel] = hasValue ? sum : null;
       }
       return result;
     }
