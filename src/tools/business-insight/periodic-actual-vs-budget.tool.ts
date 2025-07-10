@@ -114,62 +114,19 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const budgetReport = budgetResp.result?.[0];
 
-    // Helper: extract period values for a section title (sums all account/category rows per period)
-    function extractPeriodValues(
-      report: any,
-      sectionTitle: string,
-    ): Record<string, number | null> {
-      const result: Record<string, number | null> = {};
-      if (!report?.rows) return result;
-      const section = report.rows.find(
-        (row: any) =>
-          row.rowType === "Section" &&
-          typeof row.title === "string" &&
-          row.title.toLowerCase().includes(sectionTitle.toLowerCase()),
-      );
-      if (!section || !Array.isArray(section.rows)) return result;
-      // For each period column, sum all 'Row' rows (accounts/categories)
-      const numPeriods = Array.isArray(report.columns) ? report.columns.length - 1 : 0;
-      for (let i = 1; i <= numPeriods; i++) {
-        let periodLabel = `Period ${i}`;
-        if (Array.isArray(report.columns) && report.columns[i]) {
-          periodLabel = report.columns[i].date || report.columns[i].title || periodLabel;
-        }
-        let sum = 0;
-        let hasValue = false;
-        for (const row of section.rows) {
-          if (row.rowType === "Row" && Array.isArray(row.cells) && row.cells[i]) {
-            const val = row.cells[i].value ? parseFloat(String(row.cells[i].value).replace(/[^0-9.-]+/g, "")) : null;
-            if (val !== null && !isNaN(val)) {
-              sum += val;
-              hasValue = true;
-            }
-          }
-        }
-        result[periodLabel] = hasValue ? sum : null;
-      }
-      return result;
-    }
-
-    // Extract period values for the requested metric
-    const actualPeriods = extractPeriodValues(actualReport, args.metric);
-    const budgetPeriods = extractPeriodValues(budgetReport, args.metric);
-    // Union of all periods
-    const allPeriods = Array.from(
-      new Set([...Object.keys(actualPeriods), ...Object.keys(budgetPeriods)]),
-    );
-    // Build result array
-    const comparison = allPeriods.map((period) => ({
-      period,
-      actual: period in actualPeriods ? actualPeriods[period] : null,
-      budgeted: period in budgetPeriods ? budgetPeriods[period] : null,
-    }));
-
+    // Instead of extracting and matching by metric, just return the full report JSONs for actual and budgeted
     return {
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify(comparison, null, 2),
+          text: JSON.stringify(
+            {
+              actual: actualReport,
+              budgeted: budgetReport,
+            },
+            null,
+            2,
+          ),
         },
       ],
     };
