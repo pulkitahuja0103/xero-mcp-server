@@ -2,6 +2,7 @@ import { z } from "zod";
 import { CreateXeroTool } from "../../helpers/create-xero-tool.js";
 import { listXeroProfitAndLoss } from "../../handlers/list-xero-profit-and-loss.handler.js";
 import { listXeroBudgetSummary } from "../../handlers/list-xero-budget-summary.handler.js";
+import { ReportWithRow, ReportRow, ReportCell } from "xero-node";
 
 /**
  * This tool compares actual and budgeted values for a given metric (e.g., Net Profit, Revenue, Expenses) period-by-period (e.g., by month).
@@ -96,6 +97,48 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const actualReport = actualResp.result;
 
+    // Extract and de-cumulate actuals for the requested metric
+    function getSectionRows(
+      report: ReportWithRow | null,
+      metric: string,
+    ): ReportRow[] {
+      if (!report?.rows) return [];
+      const section = report.rows.find(
+        (row: ReportRow) =>
+          (row.rowType as unknown as string) === "Section" &&
+          row.title?.toLowerCase() === metric.toLowerCase(),
+      );
+      if (!section?.rows) return [];
+      return section.rows.filter(
+        (row: ReportRow) => (row.rowType as unknown as string) === "Row",
+      );
+    }
+
+    function getPeriodValues(row: ReportRow): number[] {
+      return (
+        row.cells?.map((cell: ReportCell) => {
+          if (typeof cell.value === "number") return cell.value;
+          if (typeof cell.value === "string" && cell.value !== undefined)
+            return parseFloat(cell.value);
+          return 0;
+        }) || []
+      );
+    }
+
+    // Find the section for the requested metric (e.g., Operating Expenses)
+    const actualRows = getSectionRows(actualReport, args.metric);
+    const cumulative: number[] = [];
+    for (const row of actualRows) {
+      const vals = getPeriodValues(row);
+      vals.forEach((v: number, i: number) => {
+        cumulative[i] = (cumulative[i] || 0) + v;
+      });
+    }
+    // Convert cumulative to period-by-period (monthly) values
+    const actualPeriodValues: number[] = cumulative.map((v, i, arr) =>
+      i === 0 ? v : v - arr[i - 1],
+    );
+
     // Fetch budget
     const budgetResp = await listXeroBudgetSummary(
       fromDate,
@@ -114,18 +157,59 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const budgetReport = budgetResp.result?.[0];
 
+    // Extract budgeted values for the metric
+    function getBudgetSectionRows(
+      report: ReportWithRow | null,
+      metric: string,
+    ): ReportRow[] {
+      if (!report?.rows) return [];
+      const section = report.rows.find(
+        (row: ReportRow) =>
+          (row.rowType as unknown as string) === "Section" &&
+          row.title?.toLowerCase() === metric.toLowerCase(),
+      );
+      if (!section?.rows) return [];
+      return section.rows.filter(
+        (row: ReportRow) => (row.rowType as unknown as string) === "Row",
+      );
+    }
+    const budgetRows = getBudgetSectionRows(budgetReport, args.metric);
+    const budgetValues: number[] = [];
+    for (const row of budgetRows) {
+      const vals = getPeriodValues(row);
+      vals.forEach((v: number, i: number) => {
+        budgetValues[i] = (budgetValues[i] || 0) + v;
+      });
+    }
+
+    // Get period labels from actualReport (Xero P&L report uses columns[0].cells for period titles)
+    let periodsArr: string[] = [];
+    if (actualReport?.rows?.length) {
+      const headerRow = actualReport.rows.find(
+        (row: ReportRow) => (row.rowType as unknown as string) === "Header",
+      );
+      if (headerRow && headerRow.cells) {
+        periodsArr = headerRow.cells.map((cell: ReportCell) =>
+          String(cell.value),
+        );
+      }
+    }
+    // Fallback: use index as period if no header found
+    if (!periodsArr.length) {
+      periodsArr = actualPeriodValues.map((_, i) => `Period ${i + 1}`);
+    }
+
+    const result = periodsArr.map((period, i) => ({
+      period,
+      actual: actualPeriodValues[i] ?? null,
+      budgeted: budgetValues[i] ?? null,
+    }));
+
     return {
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify(
-            {
-              actual: actualReport,
-              budgeted: budgetReport,
-            },
-            null,
-            2,
-          ),
+          text: JSON.stringify(result, null, 2),
         },
       ],
     };
