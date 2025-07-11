@@ -96,24 +96,6 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const actualReport = actualResp.result;
 
-    // Convert cumulative actuals to month-wise actuals
-    if (
-      Array.isArray(actualReport) &&
-      actualReport.length > 1 &&
-      timeframe === "MONTH"
-    ) {
-      for (let i = actualReport.length - 1; i > 0; i--) {
-        if (
-          actualReport[i]?.Actual != null &&
-          actualReport[i - 1]?.Actual != null
-        ) {
-          actualReport[i].Actual =
-            actualReport[i].Actual - actualReport[i - 1].Actual;
-        }
-      }
-      // First month stays as is (already non-cumulative)
-    }
-
     // Fetch budget
     const budgetResp = await listXeroBudgetSummary(
       fromDate,
@@ -140,6 +122,10 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
             {
               actual: actualReport,
               budgeted: budgetReport,
+              timeframe: timeframe,
+              periods: periods,
+              fromDate: fromDate,
+              toDate: toDate,
             },
             null,
             2,
