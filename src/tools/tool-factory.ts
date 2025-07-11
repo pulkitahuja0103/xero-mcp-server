@@ -5,7 +5,6 @@ import { DeleteTools } from "./delete/index.js";
 import { GetTools } from "./get/index.js";
 import { ListTools } from "./list/index.js";
 import { UpdateTools } from "./update/index.js";
-// import { BusinessInsightTools } from "./business-insight/index.js";
 
 export function ToolFactory(server: McpServer) {
   DeleteTools.map((tool) => tool()).forEach((tool) =>
@@ -23,7 +22,4 @@ export function ToolFactory(server: McpServer) {
   UpdateTools.map((tool) => tool()).forEach((tool) =>
     server.tool(tool.name, tool.description, tool.schema, tool.handler),
   );
-  // BusinessInsightTools.map((tool) => tool()).forEach((tool) =>
-  //   server.tool(tool.name, tool.description, tool.schema, tool.handler),
-  // );
 }
