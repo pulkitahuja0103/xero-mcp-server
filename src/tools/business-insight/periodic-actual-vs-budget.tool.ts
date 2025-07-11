@@ -114,7 +114,6 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const budgetReport = budgetResp.result?.[0];
 
-    // Instead of extracting and matching by metric, just return the full report JSONs for actual and budgeted
     return {
       content: [
         {

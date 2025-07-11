@@ -65,7 +65,8 @@ export async function listXeroProfitAndLoss(
       toDate,
       periods,
       timeframe,
-      paymentsOnly,
+      standardLayout, // FIX: pass standardLayout in correct position
+      paymentsOnly, // FIX: pass paymentsOnly in correct position
     );
 
     if (!profitAndLoss) {
@@ -88,4 +89,4 @@ export async function listXeroProfitAndLoss(
       error: formatError(error),
     };
   }
-} 
+}
