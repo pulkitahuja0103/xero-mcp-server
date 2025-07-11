@@ -96,28 +96,6 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const actualReport = actualResp.result;
 
-    // Transform cumulative actuals to period-specific values for Operating Expenses
-    function getPeriodActuals(report: any, metricName: any) {
-      // Find the section for the metric (e.g., 'Operating Expenses')
-      const section = report?.rows?.find(
-        (row) => row?.title?.toLowerCase() === metricName.toLowerCase(),
-      );
-      if (!section || !section.rows) return [];
-      // Get cumulative values for each period
-      const cumulative = section.rows.map((row) => {
-        const cell = row.cells?.[0];
-        return cell ? Number(cell.value) : null;
-      });
-      // Convert cumulative to period-specific
-      const periodActuals = cumulative.map((val, idx) => {
-        if (val === null) return null;
-        if (idx === 0) return val;
-        const prev = cumulative[idx - 1];
-        return prev !== null ? val - prev : val;
-      });
-      return periodActuals;
-    }
-
     // Fetch budget
     const budgetResp = await listXeroBudgetSummary(
       fromDate,
@@ -136,37 +114,18 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const budgetReport = budgetResp.result?.[0];
 
-    // Extract period labels
-    const periodLabels =
-      actualReport?.rows
-        ?.find((row) => row?.title?.toLowerCase() === args.metric.toLowerCase())
-        ?.rows?.map((row) => row?.title) || [];
-
-    // Get actuals and budgeted values
-    const actuals = getPeriodActuals(actualReport, args.metric);
-    const budgeted =
-      budgetReport?.rows
-        ?.find((row) => row?.title?.toLowerCase() === args.metric.toLowerCase())
-        ?.cells?.map((cell) => Number(cell.value)) || [];
-
-    // Build result array
-    const result = periodLabels.map((label, idx) => {
-      const actual = actuals[idx] ?? null;
-      const budget = budgeted[idx] ?? null;
-      return {
-        Month: label,
-        "Actual Operating Expenses": actual,
-        "Budgeted Operating Expenses": budget,
-        "Variance (Actual - Budgeted)":
-          actual !== null && budget !== null ? actual - budget : null,
-      };
-    });
-
     return {
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify(result, null, 2),
+          text: JSON.stringify(
+            {
+              actual: actualReport,
+              budgeted: budgetReport,
+            },
+            null,
+            2,
+          ),
         },
       ],
     };
