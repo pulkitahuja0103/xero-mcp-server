@@ -96,6 +96,44 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const actualReport = actualResp.result;
 
+    // Minimal types for report structure
+    interface ReportCell {
+      value?: string | number | null;
+    }
+    interface ReportRow {
+      cells: ReportCell[];
+    }
+    interface ReportSection {
+      title?: string;
+      rows: ReportRow[];
+    }
+    interface Report {
+      sections?: ReportSection[];
+    }
+
+    // Convert cumulative actuals to period-specific values
+    function getPeriodActuals(
+      report: Report,
+      metric: string,
+    ): (number | null)[] {
+      const section = report?.sections?.find(
+        (s: ReportSection) => s.title?.toLowerCase() === metric.toLowerCase(),
+      );
+      if (!section || !section.rows) return [];
+      const cells = section.rows[0].cells;
+      const periodActuals: (number | null)[] = [];
+      for (let i = 0; i < cells.length; i++) {
+        const current = Number(cells[i]?.value ?? null);
+        const prev = i > 0 ? Number(cells[i - 1]?.value ?? 0) : 0;
+        periodActuals.push(current !== null ? current - prev : null);
+      }
+      return periodActuals;
+    }
+    const actualsByPeriod = getPeriodActuals(
+      actualReport as Report,
+      args.metric,
+    );
+
     // Fetch budget
     const budgetResp = await listXeroBudgetSummary(
       fromDate,
@@ -114,18 +152,43 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const budgetReport = budgetResp.result?.[0];
 
+    // Extract budgeted values for the metric
+    function getBudgetByPeriod(
+      report: Report,
+      metric: string,
+    ): (number | null)[] {
+      const section = report?.sections?.find(
+        (s: ReportSection) => s.title?.toLowerCase() === metric.toLowerCase(),
+      );
+      if (!section || !section.rows) return [];
+      return section.rows[0].cells.map((c: ReportCell) =>
+        Number(c?.value ?? null),
+      );
+    }
+    const budgetByPeriod = getBudgetByPeriod(
+      budgetReport as Report,
+      args.metric,
+    );
+
+    // Build result array
+    const result = [];
+    for (
+      let i = 0;
+      i < Math.max(actualsByPeriod.length, budgetByPeriod.length);
+      i++
+    ) {
+      result.push({
+        period: i + 1,
+        actual: actualsByPeriod[i] ?? null,
+        budgeted: budgetByPeriod[i] ?? null,
+      });
+    }
+
     return {
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify(
-            {
-              actual: actualReport,
-              budgeted: budgetReport,
-            },
-            null,
-            2,
-          ),
+          text: JSON.stringify(result, null, 2),
         },
       ],
     };
