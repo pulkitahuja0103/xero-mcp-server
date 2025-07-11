@@ -54,25 +54,23 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     const fromDate = args.fromDate || defaultFrom;
     const toDate = args.toDate || defaultToStr;
     let periods = args.periods;
-    let timeframe = args.timeframe || "MONTH";
+    const timeframe = args.timeframe || "MONTH";
 
-    // Budget summary only supports MONTH or YEAR
-    let budgetTimeframe: "MONTH" | "YEAR" = timeframe === "YEAR" ? "YEAR" : "MONTH";
-    if (timeframe === "QUARTER") {
-      budgetTimeframe = "MONTH";
-      timeframe = "MONTH"; // Align actuals and budget
-    }
-
-    // Calculate periods based on MONTH or YEAR only
+    // If user requests a range over multiple months/quarters/years and periods is not set, calculate periods
     if (!periods && fromDate && toDate) {
       const start = new Date(fromDate);
       const end = new Date(toDate);
-      if (budgetTimeframe === "MONTH") {
+      if (timeframe === "MONTH") {
         periods =
           (end.getFullYear() - start.getFullYear()) * 12 +
           (end.getMonth() - start.getMonth()) +
           1;
-      } else if (budgetTimeframe === "YEAR") {
+      } else if (timeframe === "QUARTER") {
+        periods =
+          (end.getFullYear() - start.getFullYear()) * 4 +
+          (Math.floor(end.getMonth() / 3) - Math.floor(start.getMonth() / 3)) +
+          1;
+      } else if (timeframe === "YEAR") {
         periods = end.getFullYear() - start.getFullYear() + 1;
       }
     }
@@ -102,7 +100,7 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     const budgetResp = await listXeroBudgetSummary(
       fromDate,
       periods,
-      budgetTimeframe,
+      timeframe === "YEAR" ? "YEAR" : "MONTH", // Budget summary only supports MONTH or YEAR
     );
     if (budgetResp.isError) {
       return {
