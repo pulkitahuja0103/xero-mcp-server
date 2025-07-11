@@ -54,23 +54,25 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     const fromDate = args.fromDate || defaultFrom;
     const toDate = args.toDate || defaultToStr;
     let periods = args.periods;
-    const timeframe = args.timeframe || "MONTH";
+    let timeframe = args.timeframe || "MONTH";
 
-    // If user requests a range over multiple months/quarters/years and periods is not set, calculate periods
+    // Budget summary only supports MONTH or YEAR
+    let budgetTimeframe: "MONTH" | "YEAR" = timeframe === "YEAR" ? "YEAR" : "MONTH";
+    if (timeframe === "QUARTER") {
+      budgetTimeframe = "MONTH";
+      timeframe = "MONTH"; // Align actuals and budget
+    }
+
+    // Calculate periods based on MONTH or YEAR only
     if (!periods && fromDate && toDate) {
       const start = new Date(fromDate);
       const end = new Date(toDate);
-      if (timeframe === "MONTH") {
+      if (budgetTimeframe === "MONTH") {
         periods =
           (end.getFullYear() - start.getFullYear()) * 12 +
           (end.getMonth() - start.getMonth()) +
           1;
-      } else if (timeframe === "QUARTER") {
-        periods =
-          (end.getFullYear() - start.getFullYear()) * 4 +
-          (Math.floor(end.getMonth() / 3) - Math.floor(start.getMonth() / 3)) +
-          1;
-      } else if (timeframe === "YEAR") {
+      } else if (budgetTimeframe === "YEAR") {
         periods = end.getFullYear() - start.getFullYear() + 1;
       }
     }
@@ -96,49 +98,11 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const actualReport = actualResp.result;
 
-    // Minimal types for report structure
-    interface ReportCell {
-      value?: string | number | null;
-    }
-    interface ReportRow {
-      cells: ReportCell[];
-    }
-    interface ReportSection {
-      title?: string;
-      rows: ReportRow[];
-    }
-    interface Report {
-      sections?: ReportSection[];
-    }
-
-    // Convert cumulative actuals to period-specific values
-    function getPeriodActuals(
-      report: Report,
-      metric: string,
-    ): (number | null)[] {
-      const section = report?.sections?.find(
-        (s: ReportSection) => s.title?.toLowerCase() === metric.toLowerCase(),
-      );
-      if (!section || !section.rows) return [];
-      const cells = section.rows[0].cells;
-      const periodActuals: (number | null)[] = [];
-      for (let i = 0; i < cells.length; i++) {
-        const current = Number(cells[i]?.value ?? null);
-        const prev = i > 0 ? Number(cells[i - 1]?.value ?? 0) : 0;
-        periodActuals.push(current !== null ? current - prev : null);
-      }
-      return periodActuals;
-    }
-    const actualsByPeriod = getPeriodActuals(
-      actualReport as Report,
-      args.metric,
-    );
-
     // Fetch budget
     const budgetResp = await listXeroBudgetSummary(
       fromDate,
       periods,
-      timeframe === "YEAR" ? "YEAR" : "MONTH", // Budget summary only supports MONTH or YEAR
+      budgetTimeframe,
     );
     if (budgetResp.isError) {
       return {
@@ -152,43 +116,18 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const budgetReport = budgetResp.result?.[0];
 
-    // Extract budgeted values for the metric
-    function getBudgetByPeriod(
-      report: Report,
-      metric: string,
-    ): (number | null)[] {
-      const section = report?.sections?.find(
-        (s: ReportSection) => s.title?.toLowerCase() === metric.toLowerCase(),
-      );
-      if (!section || !section.rows) return [];
-      return section.rows[0].cells.map((c: ReportCell) =>
-        Number(c?.value ?? null),
-      );
-    }
-    const budgetByPeriod = getBudgetByPeriod(
-      budgetReport as Report,
-      args.metric,
-    );
-
-    // Build result array
-    const result = [];
-    for (
-      let i = 0;
-      i < Math.max(actualsByPeriod.length, budgetByPeriod.length);
-      i++
-    ) {
-      result.push({
-        period: i + 1,
-        actual: actualsByPeriod[i] ?? null,
-        budgeted: budgetByPeriod[i] ?? null,
-      });
-    }
-
     return {
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify(result, null, 2),
+          text: JSON.stringify(
+            {
+              actual: actualReport,
+              budgeted: budgetReport,
+            },
+            null,
+            2,
+          ),
         },
       ],
     };
