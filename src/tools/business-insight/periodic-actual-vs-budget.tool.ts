@@ -4,7 +4,7 @@ import { listXeroProfitAndLoss } from "../../handlers/list-xero-profit-and-loss.
 import { listXeroBudgetSummary } from "../../handlers/list-xero-budget-summary.handler.js";
 
 /**
- * This tool compares actual and budgeted values for a given metric (e.g., Net Profit, Revenue, Expenses) period-by-period (e.g., by month).
+ * This tool compares actual and budgeted values for a given metric (e.g., Net Profit, Revenue, Expenses) period-by-period (e.g., by month, quarter, or year).
  * It aligns periods and ensures missing actuals or budgets are shown as null.
  */
 const PeriodicActualVsBudgetTool = CreateXeroTool(
@@ -46,20 +46,16 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
       .describe("Include only accounts with payments (optional)"),
   },
   async (args) => {
-    // Set defaults
     const now = new Date();
     const defaultFrom = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-    const defaultTo = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const defaultToStr = defaultTo.toISOString().slice(0, 10);
     const fromDate = args.fromDate || defaultFrom;
-    const toDate = args.toDate || defaultToStr;
-    let periods = args.periods;
     const timeframe = args.timeframe || "MONTH";
 
-    // If user requests a range over multiple months/quarters/years and periods is not set, calculate periods
-    if (!periods && fromDate && toDate) {
-      const start = new Date(fromDate);
-      const end = new Date(toDate);
+    // Auto-calculate periods if not provided
+    let periods = args.periods;
+    if (!periods && args.fromDate && args.toDate) {
+      const start = new Date(args.fromDate);
+      const end = new Date(args.toDate);
       if (timeframe === "MONTH") {
         periods =
           (end.getFullYear() - start.getFullYear()) * 12 +
@@ -75,10 +71,10 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
       }
     }
 
-    // Fetch actuals (P&L)
+    // === Fetch actuals ===
     const actualResp = await listXeroProfitAndLoss(
       fromDate,
-      toDate,
+      undefined, // Intentionally omit toDate to avoid cumulative results
       periods,
       timeframe,
       true,
@@ -96,7 +92,7 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const actualReport = actualResp.result;
 
-    // Fetch budget
+    // === Fetch budget ===
     const budgetResp = await listXeroBudgetSummary(
       fromDate,
       periods,
