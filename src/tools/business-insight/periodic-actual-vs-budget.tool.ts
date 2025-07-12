@@ -112,18 +112,31 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
     }
     const budgetReport = budgetResp.result?.[0];
 
+    // Utility to convert cumulative to period values and reverse if needed
+    function processActuals(actuals: any[], key: string) {
+      // Reverse if needed (assuming actuals are in reverse order)
+      const arr = [...actuals].reverse();
+      // Convert cumulative to period values
+      let prev = 0;
+      return arr.map((item) => {
+        const value = item[key];
+        const periodValue = value - prev;
+        prev = value;
+        return { ...item, [key]: periodValue };
+      });
+    }
+
     return {
       content: [
         {
           type: "text" as const,
           text: JSON.stringify(
             {
-              actual: actualReport,
+              actual: processActuals(
+                actualReport.rows || [],
+                "Actual Expenses (USD)",
+              ),
               budgeted: budgetReport,
-              timeframe: timeframe,
-              periods: periods,
-              fromDate: fromDate,
-              toDate: toDate,
             },
             null,
             2,
