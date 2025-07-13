@@ -73,9 +73,9 @@ const PeriodicActualVsBudgetTool = CreateXeroTool(
 
     // === Fetch actuals ===
     const actualResp = await listXeroProfitAndLoss(
+      fromDate,
+      args.toDate, // Intentionally omit toDate to avoid cumulative results
       undefined,
-      undefined, // Intentionally omit toDate to avoid cumulative results
-      periods,
       timeframe,
       true,
       args.paymentsOnly,
