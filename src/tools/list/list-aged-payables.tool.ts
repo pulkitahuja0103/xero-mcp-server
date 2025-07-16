@@ -1,13 +1,13 @@
 import { z } from "zod";
-import { listXeroAgedReceivables } from "../../handlers/list-aged-receivables.handler.js";
 import { CreateXeroTool } from "../../helpers/create-xero-tool.js";
 import { formatAgedReportFilter } from "../../helpers/format-aged-report-filter.js";
+import { listXeroAgedPayables } from "../../handlers/list-aged-payables.handler.js";
 
-const ListAgedReceivables = CreateXeroTool(
-  "list-aged-receivables",
-  `Lists all aged receivables in Xero.
-  This shows overdue invoices across all contacts up to a report date. OR for a certain contact up to a report date.
-    **FIRST ASK USER WHAT HE/SHE WANT FOR ALL CONTACT OR SPECIFIC CONTACT **`,
+const ListAgedPayables = CreateXeroTool(
+  "list-aged-payables",
+  `Lists the aged payables in Xero.
+  This shows aged payables across all contacts up to a report date. OR for a certain contact up to a report date
+  **FIRST ASK USER WHAT HE/SHE WANT FOR ALL CONTACT OR SPECIFIC CONTACT **.`,
   {
     contactId: z
       .string()
@@ -19,23 +19,23 @@ const ListAgedReceivables = CreateXeroTool(
       .string()
       .optional()
       .describe(
-        "Optional date to retrieve aged receivables in YYYY-MM-DD format.**FIRST ASK USER FOR DATE** If none is provided, defaults to end of the current month. and also show choosen date in the report.",
+        "Optional date to retrieve aged payables in YYYY-MM-DD format.**FIRST ASK USER FOR DATE** If none is provided, defaults to end of the current month. and also show choosen date in the report.",
       ),
     invoicesFromDate: z
       .string()
       .optional()
       .describe(
-        "Optional from date in YYYY-MM-DD format. If provided, will only show payable invoices after this date.",
+        "Optional from date in YYYY-MM-DD format. If provided, will only show payable invoices after this date for the contact.",
       ),
     invoicesToDate: z
       .string()
       .optional()
       .describe(
-        "Optional to date in YYYY-MM-DD format. If provided, will only show payable invoices before this date.",
+        "Optional to date in YYYY-MM-DD format. If provided, will only show payable invoices before this date for the contact.",
       ),
   },
   async ({ contactId, reportDate, invoicesFromDate, invoicesToDate }) => {
-    const response = await listXeroAgedReceivables(
+    const response = await listXeroAgedPayables(
       contactId,
       reportDate,
       invoicesFromDate,
@@ -47,24 +47,24 @@ const ListAgedReceivables = CreateXeroTool(
         content: [
           {
             type: "text" as const,
-            text: `Error listing aged receivables: ${response.error}`,
+            text: `Error listing aged payables by contact: ${response.error}`,
           },
         ],
       };
     }
 
-    const agedReceivablesReport = response.result;
+    const agedPayablesReport = response.result;
     const filter = formatAgedReportFilter(invoicesFromDate, invoicesToDate);
 
     return {
       content: [
         {
           type: "text" as const,
-          text: `Report Name: ${agedReceivablesReport.reportName || "Not specified"}`,
+          text: `Report Name: ${agedPayablesReport.reportName || "Not specified"}`,
         },
         {
           type: "text" as const,
-          text: `Report Date: ${agedReceivablesReport.reportDate || "Not specified"}`,
+          text: `Report Date: ${agedPayablesReport.reportDate || "Not specified"}`,
         },
         {
           type: "text" as const,
@@ -72,11 +72,11 @@ const ListAgedReceivables = CreateXeroTool(
         },
         {
           type: "text" as const,
-          text: JSON.stringify(agedReceivablesReport.rows, null, 2),
+          text: JSON.stringify(agedPayablesReport.rows, null, 2),
         },
       ],
     };
   },
 );
 
-export default ListAgedReceivables;
+export default ListAgedPayables;

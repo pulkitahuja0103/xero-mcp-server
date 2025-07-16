@@ -1,5 +1,5 @@
 import ListAccountsTool from "./list-accounts.tool.js";
-import ListAgedPayablesByContact from "./list-aged-payables-by-contact.tool.js";
+import ListAgedPayables from "./list-aged-payables.tool.js";
 import ListAgedReceivables from "./list-aged-receivables.tool.js";
 import ListBankTransactionsTool from "./list-bank-transactions.tool.js";
 import ListContactsTool from "./list-contacts.tool.js";
@@ -48,7 +48,7 @@ export const ListTools = [
   ListPayrollEmployeeLeaveBalancesTool,
   ListPayrollLeaveTypesTool,
   ListAgedReceivables,
-  ListAgedPayablesByContact,
+  ListAgedPayables,
   ListPayrollTimesheetsTool,
   ListContactGroupsTool,
   ListTrackingCategoriesTool,
