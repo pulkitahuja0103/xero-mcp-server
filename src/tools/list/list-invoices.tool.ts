@@ -8,6 +8,7 @@ const ListInvoicesTool = CreateXeroTool(
   "List invoices in Xero. This includes Draft, Submitted, and Paid invoices. \
   Ask the user if they want to see invoices for a specific contact, \
   invoice number, or to see all invoices before running. \
+  When displaying invoice data: Show **Invoice Number** , Do **not** show **invoice_id** unless the user explicitly asks for it\
   Ask the user if they want the next page of invoices after running this tool \
   if 10 invoices are returned. \
   If they want the next page, call this tool again with the next page number \
